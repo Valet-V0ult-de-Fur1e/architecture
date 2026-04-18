@@ -8,6 +8,7 @@ import (
 	"time"
 
 	tododomain "architecture/backend/internal/modules/todo/domain"
+	rabbitmq "architecture/backend/internal/platform/rabbitmq"
 
 	"github.com/google/uuid"
 )
@@ -65,6 +66,16 @@ func (s *Service) Create(ctx context.Context, userID uuid.UUID, title, descripti
 		return tododomain.Todo{}, err
 	}
 	log.Printf("todo.create: success user_id=%s todo_id=%s", userID, todo.ID)
+
+	// Event-driven: публикуем событие о создании TODO
+	go func(todo tododomain.Todo) {
+		err := rabbitmq.PublishEvent(context.Background(), "todo.created", todo)
+		if err != nil {
+			log.Printf("rabbitmq: failed to publish todo.created: %v", err)
+		} else {
+			log.Printf("rabbitmq: published todo.created for todo_id=%s", todo.ID)
+		}
+	}(todo)
 
 	if s.cache != nil {
 		if err := s.cache.SetTodo(ctx, todo); err != nil {

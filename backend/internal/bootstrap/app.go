@@ -16,6 +16,7 @@ import (
 	todoinfra "architecture/backend/internal/modules/todo/infrastructure"
 	todohttp "architecture/backend/internal/modules/todo/transport/http"
 	"architecture/backend/internal/platform/database"
+	"architecture/backend/internal/platform/rabbitmq"
 	jwtmanager "architecture/backend/internal/shared/auth/jwt"
 	"architecture/backend/internal/shared/transport/httpauth"
 
@@ -64,6 +65,21 @@ func NewApp() (*App, error) {
 		return nil, fmt.Errorf("connect redis: %w", err)
 	}
 	log.Println("bootstrap: redis connected")
+
+	go rabbitmq.StartEventConsumer(context.Background())
+
+	// Try to set up exchanges/queue/bindings in background until successful.
+	go func() {
+		for {
+			if err := rabbitmq.SetupExchangesAndQueue(context.Background()); err != nil {
+				log.Printf("rabbitmq setup failed: %v", err)
+				time.Sleep(2 * time.Second)
+				continue
+			}
+			log.Println("rabbitmq exchanges/queue/bindings set up")
+			return
+		}
+	}()
 
 	jwt := jwtmanager.NewManager(cfg.JWT.Secret)
 

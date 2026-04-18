@@ -1,3 +1,13 @@
+## Event-driven интеграция через RabbitMQ
+
+В приложении реализована полная event-driven интеграция:
+
+- При создании TODO через API автоматически публикуется событие `todo.created` в RabbitMQ (direct exchange).
+- Backend автоматически запускает consumer, который слушает очередь и логирует все события создания TODO.
+- Вся логика event-driven интеграции встроена в приложение, не требует ручного запуска отдельных скриптов.
+
+Это демонстрирует асинхронную коммуникацию между частями системы через очередь RabbitMQ (event-driven architecture).
+
 # Architecture TODO Backend (MVP Skeleton)
 
 Учебный backend на Go в стиле модульного монолита с попыткой в чистую архитектуру с DDD
@@ -74,6 +84,9 @@ make redis-cli            # вход в redis-cli внутри контейне�
 make redis-lab-seed       # создать ключи для защиты (string/hash/list/set/zset)
 make redis-lab-dump       # вывести все ключи и значения через SCAN + TYPE
 make redis-lab-ttl-demo   # демонстрация EXPIRE/TTL/PERSIST
+
+make rabbitmq-consumer    # запустить consumer
+make rabbitmq-publisher   # отправить 5 сообщений в direct exchange
 ```
 
 ## Файлы окружения

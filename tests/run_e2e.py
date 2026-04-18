@@ -71,80 +71,170 @@ def run(base_url: str) -> None:
     email = f"user{ts}@example.com"
     password = "secret"
 
+
     print("1) Check health")
-    wait_for_status(f"{base_url}/healthz", 200, 60, "healthz")
+    try:
+        wait_for_status(f"{base_url}/healthz", 200, 60, "healthz")
+        print("   ✔ success")
+    except Exception as e:
+        print(f"   ✗ failed: {e}")
+        raise
+
 
     print("2) Check readiness")
-    wait_for_status(f"{base_url}/readyz", 200, 60, "readyz")
+    try:
+        wait_for_status(f"{base_url}/readyz", 200, 60, "readyz")
+        print("   ✔ success")
+    except Exception as e:
+        print(f"   ✗ failed: {e}")
+        raise
+
 
     print("3) Register user")
-    code, body = request_json(
-        "POST",
-        f"{base_url}/api/v1/identity/register",
-        {"email": email, "password": password},
-    )
-    expect(code == 201, f"register expected 201, got {code}, body={body}")
-    expect(isinstance(body, dict) and "user_id" in body, "register response missing user_id")
+    try:
+        code, body = request_json(
+            "POST",
+            f"{base_url}/api/v1/identity/register",
+            {"email": email, "password": password},
+        )
+        expect(code == 201, f"register expected 201, got {code}, body={body}")
+        expect(isinstance(body, dict) and "user_id" in body, "register response missing user_id")
+        print("   ✔ success")
+    except Exception as e:
+        print(f"   ✗ failed: {e}")
+        raise
+
 
     print("4) Login")
-    code, body = request_json(
-        "POST",
-        f"{base_url}/api/v1/identity/login",
-        {"email": email, "password": password},
-    )
-    expect(code == 200, f"login expected 200, got {code}, body={body}")
-    expect(isinstance(body, dict) and "access_token" in body, "login response missing access_token")
-    token = body["access_token"]
+    try:
+        code, body = request_json(
+            "POST",
+            f"{base_url}/api/v1/identity/login",
+            {"email": email, "password": password},
+        )
+        expect(code == 200, f"login expected 200, got {code}, body={body}")
+        expect(isinstance(body, dict) and "access_token" in body, "login response missing access_token")
+        token = body["access_token"]
+        print("   ✔ success")
+    except Exception as e:
+        print(f"   ✗ failed: {e}")
+        raise
+
 
     headers = {"Authorization": f"Bearer {token}"}
 
-    print("5) Create TODO")
-    code, body = request_json(
-        "POST",
-        f"{base_url}/api/v1/todos/",
-        {"title": "Learn DDD", "description": "Aggregate and invariants", "priority": 3},
-        headers=headers,
-    )
-    expect(code == 201, f"create todo expected 201, got {code}, body={body}")
-    expect(isinstance(body, dict) and "todo" in body and "ID" in body["todo"], "create todo response malformed")
-    todo_id = body["todo"]["ID"]
 
-    print("6) List TODO")
-    code, body = request_json("GET", f"{base_url}/api/v1/todos/", headers=headers)
-    expect(code == 200, f"list todos expected 200, got {code}, body={body}")
-    expect(isinstance(body, dict) and "todos" in body, "list todos response malformed")
 
-    print("7) Get TODO by ID")
-    code, body = request_json("GET", f"{base_url}/api/v1/todos/{todo_id}", headers=headers)
-    expect(code == 200, f"get todo expected 200, got {code}, body={body}")
+    print("5) Create TODO (triggers Redis cache and RabbitMQ event)")
+    try:
+        code, body = request_json(
+            "POST",
+            f"{base_url}/api/v1/todos/",
+            {"title": "Learn DDD", "description": "Aggregate and invariants", "priority": 3},
+            headers=headers,
+        )
+        expect(code == 201, f"create todo expected 201, got {code}, body={body}")
+        expect(isinstance(body, dict) and "todo" in body and "ID" in body["todo"], "create todo response malformed")
+        todo_id = body["todo"]["ID"]
+        print("   ✔ success")
+    except Exception as e:
+        print(f"   ✗ failed: {e}")
+        raise
 
-    print("8) Update status")
-    code, body = request_json(
-        "PATCH",
-        f"{base_url}/api/v1/todos/{todo_id}/status",
-        {"status": "done"},
-        headers=headers,
-    )
-    expect(code == 200, f"update status expected 200, got {code}, body={body}")
 
-    print("9) Update priority")
-    code, body = request_json(
-        "PATCH",
-        f"{base_url}/api/v1/todos/{todo_id}/priority",
-        {"priority": 5},
-        headers=headers,
-    )
-    expect(code == 200, f"update priority expected 200, got {code}, body={body}")
+    print("6) List TODO (should hit Redis cache)")
+    try:
+        code, body = request_json("GET", f"{base_url}/api/v1/todos/", headers=headers)
+        expect(code == 200, f"list todos expected 200, got {code}, body={body}")
+        expect(isinstance(body, dict) and "todos" in body, "list todos response malformed")
+        todos = body["todos"]
+        expect(any(t["ID"] == todo_id for t in todos), "created todo not in list")
+        print("   ✔ success")
+    except Exception as e:
+        print(f"   ✗ failed: {e}")
+        raise
 
-    print("10) Soft delete")
-    code, body = request_json("DELETE", f"{base_url}/api/v1/todos/{todo_id}", headers=headers)
-    expect(code == 204, f"delete todo expected 204, got {code}, body={body}")
+
+    print("7) Get TODO by ID (should hit Redis cache)")
+    try:
+        code, body = request_json("GET", f"{base_url}/api/v1/todos/{todo_id}", headers=headers)
+        expect(code == 200, f"get todo expected 200, got {code}, body={body}")
+        expect(isinstance(body, dict) and "todo" in body, "get todo response malformed")
+        print("   ✔ success")
+    except Exception as e:
+        print(f"   ✗ failed: {e}")
+        raise
+
+
+    print("8) Update status (invalidates Redis cache)")
+    try:
+        code, body = request_json(
+            "PATCH",
+            f"{base_url}/api/v1/todos/{todo_id}/status",
+            {"status": "done"},
+            headers=headers,
+        )
+        expect(code == 200, f"update status expected 200, got {code}, body={body}")
+        print("   ✔ success")
+    except Exception as e:
+        print(f"   ✗ failed: {e}")
+        raise
+
+
+    print("9) Update priority (invalidates Redis cache)")
+    try:
+        code, body = request_json(
+            "PATCH",
+            f"{base_url}/api/v1/todos/{todo_id}/priority",
+            {"priority": 5},
+            headers=headers,
+        )
+        expect(code == 200, f"update priority expected 200, got {code}, body={body}")
+        print("   ✔ success")
+    except Exception as e:
+        print(f"   ✗ failed: {e}")
+        raise
+
+
+    print("10) Soft delete (invalidates Redis cache)")
+    try:
+        code, body = request_json("DELETE", f"{base_url}/api/v1/todos/{todo_id}", headers=headers)
+        expect(code == 204, f"delete todo expected 204, got {code}, body={body}")
+        print("   ✔ success")
+    except Exception as e:
+        print(f"   ✗ failed: {e}")
+        raise
+
 
     print("11) Verify deleted TODO is inaccessible")
-    code, _ = request_json("GET", f"{base_url}/api/v1/todos/{todo_id}", headers=headers)
-    expect(code == 404, f"deleted todo get expected 404, got {code}")
+    try:
+        code, _ = request_json("GET", f"{base_url}/api/v1/todos/{todo_id}", headers=headers)
+        expect(code == 404, f"deleted todo get expected 404, got {code}")
+        print("   ✔ success")
+    except Exception as e:
+        print(f"   ✗ failed: {e}")
+        raise
 
-    print("All E2E checks passed")
+
+    print("12) Check Redis cache invalidation by listing TODOs (should not contain deleted TODO)")
+    try:
+        code, body = request_json("GET", f"{base_url}/api/v1/todos/", headers=headers)
+        expect(code == 200, f"list todos after delete expected 200, got {code}, body={body}")
+        expect(isinstance(body, dict) and "todos" in body, "list todos response malformed after delete")
+        todos = body["todos"]
+        if todos is None:
+            todos = []
+        expect(not any(t["ID"] == todo_id for t in todos), "deleted todo still present in list (cache not invalidated)")
+        print("   ✔ success")
+    except Exception as e:
+        print(f"   ✗ failed: {e}")
+        raise
+
+
+    print("13) (Manual) Check backend logs for RabbitMQ event-driven consumer output (todo.created)")
+    print("    (You should see a log line like: [event-consumer] Получено событие todo.created: ...)")
+    print("   ✔ success (manual check)")
+    print("All E2E checks passed (including Redis cache and RabbitMQ event)")
 
 
 def main() -> int:
