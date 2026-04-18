@@ -5,6 +5,7 @@ import (
 
 	todoapp "architecture/backend/internal/modules/todo/application"
 	tododomain "architecture/backend/internal/modules/todo/domain"
+	"architecture/backend/internal/shared/auth/userctx"
 	"architecture/backend/internal/shared/transport/httpjson"
 
 	"github.com/go-chi/chi/v5"
@@ -159,15 +160,9 @@ func (h *Handler) SoftDelete(w http.ResponseWriter, r *http.Request) {
 }
 
 func parseUserID(w http.ResponseWriter, r *http.Request) (uuid.UUID, bool) {
-	userIDRaw := r.Header.Get("X-User-ID")
-	if userIDRaw == "" {
-		httpjson.Write(w, http.StatusUnauthorized, httpjson.ErrorResponse{Error: "X-User-ID header is required"})
-		return uuid.Nil, false
-	}
-
-	userID, err := uuid.Parse(userIDRaw)
-	if err != nil {
-		httpjson.Write(w, http.StatusUnauthorized, httpjson.ErrorResponse{Error: "invalid X-User-ID header"})
+	userID, ok := userctx.UserIDFromContext(r.Context())
+	if !ok {
+		httpjson.Write(w, http.StatusUnauthorized, httpjson.ErrorResponse{Error: "unauthorized"})
 		return uuid.Nil, false
 	}
 

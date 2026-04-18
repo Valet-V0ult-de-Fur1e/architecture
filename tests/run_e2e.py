@@ -85,11 +85,20 @@ def run(base_url: str) -> None:
     )
     expect(code == 201, f"register expected 201, got {code}, body={body}")
     expect(isinstance(body, dict) and "user_id" in body, "register response missing user_id")
-    user_id = body["user_id"]
 
-    headers = {"X-User-ID": user_id}
+    print("4) Login")
+    code, body = request_json(
+        "POST",
+        f"{base_url}/api/v1/identity/login",
+        {"email": email, "password": password},
+    )
+    expect(code == 200, f"login expected 200, got {code}, body={body}")
+    expect(isinstance(body, dict) and "access_token" in body, "login response missing access_token")
+    token = body["access_token"]
 
-    print("4) Create TODO")
+    headers = {"Authorization": f"Bearer {token}"}
+
+    print("5) Create TODO")
     code, body = request_json(
         "POST",
         f"{base_url}/api/v1/todos/",
@@ -100,16 +109,16 @@ def run(base_url: str) -> None:
     expect(isinstance(body, dict) and "todo" in body and "ID" in body["todo"], "create todo response malformed")
     todo_id = body["todo"]["ID"]
 
-    print("5) List TODO")
+    print("6) List TODO")
     code, body = request_json("GET", f"{base_url}/api/v1/todos/", headers=headers)
     expect(code == 200, f"list todos expected 200, got {code}, body={body}")
     expect(isinstance(body, dict) and "todos" in body, "list todos response malformed")
 
-    print("6) Get TODO by ID")
+    print("7) Get TODO by ID")
     code, body = request_json("GET", f"{base_url}/api/v1/todos/{todo_id}", headers=headers)
     expect(code == 200, f"get todo expected 200, got {code}, body={body}")
 
-    print("7) Update status")
+    print("8) Update status")
     code, body = request_json(
         "PATCH",
         f"{base_url}/api/v1/todos/{todo_id}/status",
@@ -118,7 +127,7 @@ def run(base_url: str) -> None:
     )
     expect(code == 200, f"update status expected 200, got {code}, body={body}")
 
-    print("8) Update priority")
+    print("9) Update priority")
     code, body = request_json(
         "PATCH",
         f"{base_url}/api/v1/todos/{todo_id}/priority",
@@ -127,11 +136,11 @@ def run(base_url: str) -> None:
     )
     expect(code == 200, f"update priority expected 200, got {code}, body={body}")
 
-    print("9) Soft delete")
+    print("10) Soft delete")
     code, body = request_json("DELETE", f"{base_url}/api/v1/todos/{todo_id}", headers=headers)
     expect(code == 204, f"delete todo expected 204, got {code}, body={body}")
 
-    print("10) Verify deleted TODO is inaccessible")
+    print("11) Verify deleted TODO is inaccessible")
     code, _ = request_json("GET", f"{base_url}/api/v1/todos/{todo_id}", headers=headers)
     expect(code == 404, f"deleted todo get expected 404, got {code}")
 
