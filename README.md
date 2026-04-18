@@ -6,6 +6,8 @@
 
 - Go HTTP API
 - PostgreSQL
+- Redis cache-aside для TODO чтения
+- JWT авторизация (login + middleware)
 - Docker / docker-compose
 
 ## Структура проекта
@@ -67,6 +69,11 @@ make logs-prod     # логи prod окружения
 make config-prod   # проверка prod compose-конфига
 
 make test-api      # запуск python e2e тестов
+
+make redis-cli            # вход в redis-cli внутри контейнера
+make redis-lab-seed       # создать ключи для защиты (string/hash/list/set/zset)
+make redis-lab-dump       # вывести все ключи и значения через SCAN + TYPE
+make redis-lab-ttl-demo   # демонстрация EXPIRE/TTL/PERSIST
 ```
 
 ## Файлы окружения
@@ -84,14 +91,24 @@ curl -X POST http://localhost:8080/api/v1/identity/register \
   -d '{"email":"user@example.com","password":"secret"}'
 ```
 
-Ответ содержит `user_id`. Для TODO-эндпоинтов передавайте его в заголовке `X-User-ID`.
+Ответ содержит `user_id`. Для TODO-эндпоинтов используйте login и передавайте `Authorization: Bearer <access_token>`.
+
+### Логин
+
+```bash
+curl -X POST http://localhost:8080/api/v1/identity/login \
+  -H "Content-Type: application/json" \
+  -d '{"email":"user@example.com","password":"secret"}'
+```
+
+Ответ содержит `access_token`.
 
 ### Создание TODO
 
 ```bash
 curl -X POST http://localhost:8080/api/v1/todos/ \
   -H "Content-Type: application/json" \
-  -H "X-User-ID: <user_id>" \
+  -H "Authorization: Bearer <access_token>" \
   -d '{"title":"Learn DDD","description":"Read aggregate chapter","priority":3}'
 ```
 
@@ -99,14 +116,14 @@ curl -X POST http://localhost:8080/api/v1/todos/ \
 
 ```bash
 curl -X GET http://localhost:8080/api/v1/todos/ \
-  -H "X-User-ID: <user_id>"
+  -H "Authorization: Bearer <access_token>"
 ```
 
 ### Получить инфо по конкретной TODO
 
 ```bash
 curl -X GET http://localhost:8080/api/v1/todos/<todo_id> \
-  -H "X-User-ID: <user_id>"
+  -H "Authorization: Bearer <access_token>"
 ```
 
 ### Изменить статус TODO
@@ -114,7 +131,7 @@ curl -X GET http://localhost:8080/api/v1/todos/<todo_id> \
 ```bash
 curl -X PATCH http://localhost:8080/api/v1/todos/<todo_id>/status \
   -H "Content-Type: application/json" \
-  -H "X-User-ID: <user_id>" \
+  -H "Authorization: Bearer <access_token>" \
   -d '{"status":"done"}'
 ```
 
@@ -123,7 +140,7 @@ curl -X PATCH http://localhost:8080/api/v1/todos/<todo_id>/status \
 ```bash
 curl -X PATCH http://localhost:8080/api/v1/todos/<todo_id>/priority \
   -H "Content-Type: application/json" \
-  -H "X-User-ID: <user_id>" \
+  -H "Authorization: Bearer <access_token>" \
   -d '{"priority":5}'
 ```
 
@@ -131,5 +148,5 @@ curl -X PATCH http://localhost:8080/api/v1/todos/<todo_id>/priority \
 
 ```bash
 curl -X DELETE http://localhost:8080/api/v1/todos/<todo_id> \
-  -H "X-User-ID: <user_id>"
+  -H "Authorization: Bearer <access_token>"
 ```

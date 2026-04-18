@@ -3,11 +3,15 @@ package config
 import (
 	"fmt"
 	"os"
+	"strconv"
+	"time"
 )
 
 type Config struct {
 	HTTPAddr string
 	DB       DBConfig
+	Redis    RedisConfig
+	JWT      JWTConfig
 }
 
 type DBConfig struct {
@@ -17,6 +21,18 @@ type DBConfig struct {
 	Password string
 	Name     string
 	SSLMode  string
+}
+
+type RedisConfig struct {
+	Addr     string
+	Password string
+	DB       int
+	TodoTTL  time.Duration
+}
+
+type JWTConfig struct {
+	Secret    string
+	ExpiresIn time.Duration
 }
 
 func Load() (Config, error) {
@@ -30,10 +46,24 @@ func Load() (Config, error) {
 			Name:     getEnv("DB_NAME", "app"),
 			SSLMode:  getEnv("DB_SSLMODE", "disable"),
 		},
+		Redis: RedisConfig{
+			Addr:     getEnv("REDIS_ADDR", "redis:6379"),
+			Password: getEnv("REDIS_PASSWORD", ""),
+			DB:       getEnvAsInt("REDIS_DB", 0),
+			TodoTTL:  getEnvAsDuration("REDIS_TODO_TTL", 2*time.Minute),
+		},
+		JWT: JWTConfig{
+			Secret:    getEnv("JWT_SECRET", "dev-secret-change-me"),
+			ExpiresIn: getEnvAsDuration("JWT_EXPIRES_IN", 24*time.Hour),
+		},
 	}
 
 	if cfg.DB.Host == "" || cfg.DB.Port == "" || cfg.DB.User == "" || cfg.DB.Name == "" {
 		return Config{}, fmt.Errorf("db env vars are required")
+	}
+
+	if cfg.JWT.Secret == "" {
+		return Config{}, fmt.Errorf("jwt secret is required")
 	}
 
 	return cfg, nil
@@ -58,4 +88,32 @@ func getEnv(key, defaultValue string) string {
 	}
 
 	return value
+}
+
+func getEnvAsInt(key string, defaultValue int) int {
+	raw := os.Getenv(key)
+	if raw == "" {
+		return defaultValue
+	}
+
+	parsed, err := strconv.Atoi(raw)
+	if err != nil {
+		return defaultValue
+	}
+
+	return parsed
+}
+
+func getEnvAsDuration(key string, defaultValue time.Duration) time.Duration {
+	raw := os.Getenv(key)
+	if raw == "" {
+		return defaultValue
+	}
+
+	parsed, err := time.ParseDuration(raw)
+	if err != nil {
+		return defaultValue
+	}
+
+	return parsed
 }
