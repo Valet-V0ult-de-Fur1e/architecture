@@ -86,3 +86,8 @@ redis-lab-ttl-demo:
 	$(COMPOSE_DEBUG) exec -T redis redis-cli TTL lab:ttl:key
 	$(COMPOSE_DEBUG) exec -T redis redis-cli PERSIST lab:ttl:key
 	$(COMPOSE_DEBUG) exec -T redis redis-cli TTL lab:ttl:key
+
+# Демонстрация RabbitMQ routing (fanout/direct/topic/headers)
+rabbitmq-demo:
+	cd backend && go run internal/platform/rabbitmq/demo.go
+
